@@ -1,5 +1,5 @@
 # OCI Terraform Deployment Guide
-## Veteran Services Platform — AWS to OCI Migration
+## AWS to OCI Migration
 
 ---
 
@@ -362,7 +362,7 @@ kubectl run redistest --image=redis:latest --rm -it -- redis-cli -h <redis_endpo
                     │          OKE Cluster (Private Subnet)                 │
                     │                                                       │
                     │   ┌─────────────┐  ┌──────────────┐  ┌────────────┐ │
-                    │   │  Angular FE  │  │ License Gen  │  │ TurboNumber│ │
+                    │   │  Angular FE  │  │ License Gen  │  │ Number│ │
                     │   └─────────────┘  └──────────────┘  └────────────┘ │
                     │   ┌─────────────┐  ┌──────────────┐                  │
                     │   │Node Backend │  │   Docuseal   │                  │
@@ -434,6 +434,4 @@ terraform destroy
 - [OCI Cache with Redis](https://docs.oracle.com/en-us/iaas/Content/ocicache/home.htm)
 - [OCI Generative AI](https://docs.oracle.com/en-us/iaas/Content/generative-ai/home.htm)
 
----
-
-*Document Version: 1.0 — Generated for Veteran Services Platform OCI Migration*
+--
