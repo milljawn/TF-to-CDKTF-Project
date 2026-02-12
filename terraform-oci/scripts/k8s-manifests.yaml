@@ -1,0 +1,584 @@
+# ============================================================
+# Kubernetes Manifests — Veteran Services Platform on OKE
+# ============================================================
+# These manifests deploy the 6 containerized workloads that
+# were running on AWS ECS Fargate. Apply after OKE is running.
+#
+# Usage:
+#   kubectl apply -f k8s-manifests.yaml
+#
+# PREREQUISITES:
+#   1. OKE cluster is running (terraform apply completed)
+#   2. kubectl is configured (see terraform output oke_kubeconfig_command)
+#   3. Container images are pushed to OCIR
+#   4. Update image URIs below with your actual OCIR paths
+#   5. Update environment variables with actual endpoints
+# ============================================================
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vetplatform
+
+---
+# ============================================================
+# OCIR Image Pull Secret
+# ============================================================
+# Create this secret with:
+# kubectl create secret docker-registry ocir-secret \
+#   --namespace vetplatform \
+#   --docker-server=<region>.ocir.io \
+#   --docker-username='<namespace>/<username>' \
+#   --docker-password='<auth_token>' \
+#   --docker-email='<email>'
+
+---
+# ============================================================
+# ConfigMap — Shared Environment Variables
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vetplatform-config
+  namespace: vetplatform
+data:
+  # UPDATE THESE with actual values from terraform output
+  REDIS_HOST: "REPLACE_WITH_REDIS_ENDPOINT"
+  REDIS_PORT: "6379"
+  DB_HOST: "REPLACE_WITH_ADB_PRIVATE_ENDPOINT"
+  DB_PORT: "1522"
+  DB_NAME: "REPLACE_WITH_ADB_DB_NAME"
+  OBJECT_STORAGE_NAMESPACE: "REPLACE_WITH_NAMESPACE"
+  OBJECT_STORAGE_BUCKET: "REPLACE_WITH_BUCKET_NAME"
+  OCI_REGION: "REPLACE_WITH_REGION"
+  QUEUE_ENDPOINT: "REPLACE_WITH_QUEUE_ENDPOINT"
+  VA_API_ENDPOINT: "REPLACE_WITH_VA_API_URL"
+  USPS_API_ENDPOINT: "REPLACE_WITH_USPS_API_URL"
+  NODE_ENV: "production"
+
+---
+# ============================================================
+# Secret — Database Credentials
+# ============================================================
+# Create this secret with:
+# kubectl create secret generic db-credentials \
+#   --namespace vetplatform \
+#   --from-literal=DB_USER=admin \
+#   --from-literal=DB_PASSWORD='<adb_admin_password>'
+
+---
+# ============================================================
+# 1. ANGULAR FRONTEND
+# Replaces: ECS Fargate Container — Angular Frontend
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: angular-frontend
+  namespace: vetplatform
+  labels:
+    app: angular-frontend
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: angular-frontend
+  template:
+    metadata:
+      labels:
+        app: angular-frontend
+        tier: frontend
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: angular-frontend
+          image: REGION.ocir.io/NAMESPACE/vetplatform/angular-frontend:latest  # UPDATE
+          ports:
+            - containerPort: 80
+              name: http
+          envFrom:
+            - configMapRef:
+                name: vetplatform-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: angular-frontend
+  namespace: vetplatform
+spec:
+  selector:
+    app: angular-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  type: ClusterIP
+
+---
+# ============================================================
+# 2. NODE BACKEND
+# Replaces: ECS Fargate Container — Node Backend
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-backend
+  namespace: vetplatform
+  labels:
+    app: node-backend
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: node-backend
+  template:
+    metadata:
+      labels:
+        app: node-backend
+        tier: backend
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: node-backend
+          image: REGION.ocir.io/NAMESPACE/vetplatform/node-backend:latest  # UPDATE
+          ports:
+            - containerPort: 3000
+              name: http
+            - containerPort: 3001
+              name: websocket
+          envFrom:
+            - configMapRef:
+                name: vetplatform-config
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-backend
+  namespace: vetplatform
+spec:
+  selector:
+    app: node-backend
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http
+    - port: 3001
+      targetPort: 3001
+      name: websocket
+  type: ClusterIP
+
+---
+# ============================================================
+# 3. LICENSE GENERATOR
+# Replaces: ECS Fargate Container — License Generator
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: license-generator
+  namespace: vetplatform
+  labels:
+    app: license-generator
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: license-generator
+  template:
+    metadata:
+      labels:
+        app: license-generator
+        tier: backend
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: license-generator
+          image: REGION.ocir.io/NAMESPACE/vetplatform/license-generator:latest  # UPDATE
+          ports:
+            - containerPort: 4000
+              name: graphql
+          envFrom:
+            - configMapRef:
+                name: vetplatform-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: license-generator
+  namespace: vetplatform
+spec:
+  selector:
+    app: license-generator
+  ports:
+    - port: 4000
+      targetPort: 4000
+      name: graphql
+  type: ClusterIP
+
+---
+# ============================================================
+# 4. TURBONUMBER
+# Replaces: ECS Fargate Container — TurboNumber
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: turbonumber
+  namespace: vetplatform
+  labels:
+    app: turbonumber
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: turbonumber
+  template:
+    metadata:
+      labels:
+        app: turbonumber
+        tier: backend
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: turbonumber
+          image: REGION.ocir.io/NAMESPACE/vetplatform/turbonumber:latest  # UPDATE
+          ports:
+            - containerPort: 4001
+              name: graphql
+          envFrom:
+            - configMapRef:
+                name: vetplatform-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4001
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: turbonumber
+  namespace: vetplatform
+spec:
+  selector:
+    app: turbonumber
+  ports:
+    - port: 4001
+      targetPort: 4001
+      name: graphql
+  type: ClusterIP
+
+---
+# ============================================================
+# 5. DOCUSEAL
+# Replaces: ECS Fargate Container — Docuseal
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docuseal
+  namespace: vetplatform
+  labels:
+    app: docuseal
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docuseal
+  template:
+    metadata:
+      labels:
+        app: docuseal
+        tier: backend
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: docuseal
+          image: REGION.ocir.io/NAMESPACE/vetplatform/docuseal:latest  # UPDATE
+          ports:
+            - containerPort: 3003
+              name: http
+          envFrom:
+            - configMapRef:
+                name: vetplatform-config
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: docuseal
+  namespace: vetplatform
+spec:
+  selector:
+    app: docuseal
+  ports:
+    - port: 3003
+      targetPort: 3003
+      name: http
+  type: ClusterIP
+
+---
+# ============================================================
+# 6. NGINX INGRESS CONTROLLER (within OKE)
+# Replaces: ECS Fargate Container — Nginx Web Server
+# Routes traffic to Angular FE and Node Backend
+# ============================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  namespace: vetplatform
+data:
+  nginx.conf: |
+    worker_processes auto;
+    events {
+        worker_connections 1024;
+    }
+    http {
+        upstream frontend {
+            server angular-frontend.vetplatform.svc.cluster.local:80;
+        }
+        upstream backend {
+            server node-backend.vetplatform.svc.cluster.local:3000;
+        }
+        upstream license_gen {
+            server license-generator.vetplatform.svc.cluster.local:4000;
+        }
+        upstream turbonumber {
+            server turbonumber.vetplatform.svc.cluster.local:4001;
+        }
+        upstream docuseal {
+            server docuseal.vetplatform.svc.cluster.local:3003;
+        }
+
+        server {
+            listen 80;
+
+            # Frontend
+            location / {
+                proxy_pass http://frontend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+
+            # Node Backend API
+            location /api/ {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+            }
+
+            # GraphQL endpoints
+            location /graphql {
+                proxy_pass http://backend;
+                proxy_set_header Host $host;
+            }
+
+            # License Generator
+            location /license/ {
+                proxy_pass http://license_gen;
+                proxy_set_header Host $host;
+            }
+
+            # TurboNumber
+            location /turbonumber/ {
+                proxy_pass http://turbonumber;
+                proxy_set_header Host $host;
+            }
+
+            # Docuseal
+            location /docuseal/ {
+                proxy_pass http://docuseal;
+                proxy_set_header Host $host;
+            }
+
+            # Health check
+            location /health {
+                return 200 'OK';
+                add_header Content-Type text/plain;
+            }
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-proxy
+  namespace: vetplatform
+  labels:
+    app: nginx-proxy
+    tier: ingress
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-proxy
+  template:
+    metadata:
+      labels:
+        app: nginx-proxy
+        tier: ingress
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: nginx
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+              name: http
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "128Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-proxy
+  namespace: vetplatform
+  annotations:
+    oci.oraclecloud.com/load-balancer-type: "lb"
+spec:
+  selector:
+    app: nginx-proxy
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  type: ClusterIP
