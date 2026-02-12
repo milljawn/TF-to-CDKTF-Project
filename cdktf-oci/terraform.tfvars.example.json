@@ -1,0 +1,65 @@
+{
+  "_comment": "Copy to terraform.tfvars.json and fill in all REQUIRED values. NEVER commit terraform.tfvars.json.",
+
+  "tenancy_ocid": "ocid1.tenancy.oc1..REPLACE_WITH_YOUR_TENANCY_OCID",
+  "user_ocid": "ocid1.user.oc1..REPLACE_WITH_YOUR_USER_OCID",
+  "compartment_ocid": "ocid1.compartment.oc1..REPLACE_WITH_YOUR_COMPARTMENT_OCID",
+  "fingerprint": "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99",
+  "private_key_path": "~/.oci/oci_api_key.pem",
+  "region": "us-ashburn-1",
+
+  "project_name": "vetplatform",
+  "environment": "prod",
+
+  "vcn_cidr": "10.0.0.0/16",
+  "public_subnet_cidr": "10.0.1.0/24",
+  "private_subnet_app_cidr": "10.0.10.0/24",
+  "private_subnet_db_cidr": "10.0.20.0/24",
+  "private_subnet_cache_cidr": "10.0.30.0/24",
+  "oke_api_subnet_cidr": "10.0.5.0/24",
+  "oke_pod_subnet_cidr": "10.0.128.0/17",
+
+  "dns_zone_name": "example.com",
+  "app_hostname": "vetservices",
+
+  "nginx_shape": "VM.Standard.E4.Flex",
+  "nginx_ocpus": 2,
+  "nginx_memory_gb": 16,
+  "nginx_boot_volume_gb": 50,
+  "ssh_public_key_path": "~/.ssh/id_rsa.pub",
+  "nginx_image_ocid": "",
+
+  "kubernetes_version": "v1.29.1",
+  "oke_node_shape": "VM.Standard.E4.Flex",
+  "oke_node_ocpus": 2,
+  "oke_node_memory_gb": 16,
+  "oke_node_pool_size": 3,
+  "oke_node_boot_volume_gb": 50,
+
+  "ocir_namespace": "REPLACE_WITH_YOUR_NAMESPACE",
+
+  "adb_admin_password": "REPLACE_WITH_STRONG_PASSWORD",
+  "adb_ecpu_count": 4,
+  "adb_storage_tb": 1,
+  "adb_is_free_tier": false,
+
+  "redis_node_count": 1,
+  "redis_memory_gb": 8,
+
+  "bucket_name": "veteran-documents",
+  "bucket_storage_tier": "Standard",
+  "bucket_versioning": true,
+
+  "lb_shape": "flexible",
+  "lb_min_bandwidth_mbps": 10,
+  "lb_max_bandwidth_mbps": 100,
+
+  "notification_topic_name": "vetplatform-doc-alerts",
+  "notification_email": "",
+  "queue_name": "vetplatform-user-notifications",
+
+  "waf_enabled": true,
+
+  "va_api_endpoint": "",
+  "usps_api_endpoint": ""
+}

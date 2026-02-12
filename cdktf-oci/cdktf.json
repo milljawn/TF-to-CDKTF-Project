@@ -1,0 +1,12 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node main.ts",
+  "projectId": "vetplatform-oci-cdktf",
+  "sendCrashReports": false,
+  "terraformProviders": [
+    "oracle/oci@~> 5.30.0"
+  ],
+  "terraformModules": [],
+  "codeMakerOutput": ".gen",
+  "context": {}
+}

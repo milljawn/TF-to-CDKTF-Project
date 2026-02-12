@@ -1,0 +1,29 @@
+{
+  "name": "vetplatform-oci-cdktf",
+  "version": "1.0.0",
+  "description": "CDKTF deployment for Veteran Services Platform on OCI",
+  "main": "main.js",
+  "scripts": {
+    "get": "cdktf get",
+    "build": "tsc",
+    "synth": "cdktf synth",
+    "diff": "cdktf diff",
+    "deploy": "cdktf deploy",
+    "destroy": "cdktf destroy",
+    "test": "echo \"No tests configured\" && exit 0",
+    "upgrade": "npm i cdktf@latest cdktf-cli@latest constructs@latest"
+  },
+  "dependencies": {
+    "cdktf": "^0.21.0",
+    "cdktf-cli": "^0.21.0",
+    "constructs": "^10.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
